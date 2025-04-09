@@ -21,6 +21,8 @@ load_dotenv()
 set_api_key(os.getenv('ELEVENLABS_API_KEY'))
 
 def generate_speech(text, output_file):
+    """Generate speech from text using ElevenLabs"""
+    temp_mp3_path = None
     try:
         # Create a temporary file for the initial MP3
         with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_mp3:
@@ -31,7 +33,7 @@ def generate_speech(text, output_file):
                 audio = generate(
                     text=text,
                     voice=Voice(
-                        voice_id=os.getenv('VOICE_ID', '21m00Tcm4TlvDq8ikWAM'),  # Default to Rachel
+                        voice_id=os.getenv('VOICE_ID', '21m00Tcm4TlvDq8ikWAM'),
                         settings=VoiceSettings(
                             stability=0.5,
                             similarity_boost=0.75,
@@ -62,8 +64,7 @@ def generate_speech(text, output_file):
                     audio = AudioSegment.from_mp3(temp_mp3_path)
                     
                     # Adjust audio settings for better voice quality
-                    # Increase volume by 3dB
-                    audio = audio + 3
+                    audio = audio + 3  # Increase volume by 3dB
                     
                     # Export with specific settings for Discord
                     audio.export(
@@ -87,13 +88,11 @@ def generate_speech(text, output_file):
                         
                     print(f"Final audio file created successfully: {output_file} ({final_size} bytes)")
                     return True
-                finally:
-                    # Clean up the temporary MP3 file
-                    try:
-                        os.unlink(temp_mp3_path)
-                    except Exception as e:
-                        print(f"Error cleaning up MP3 file: {e}")
-                        
+                    
+                except Exception as e:
+                    print(f"Error during audio conversion: {e}")
+                    return False
+                    
             except Exception as e:
                 print(f"Error generating speech with ElevenLabs: {e}")
                 return False
@@ -101,6 +100,15 @@ def generate_speech(text, output_file):
     except Exception as e:
         print(f"Error in speech generation: {e}")
         return False
+        
+    finally:
+        # Clean up the temporary MP3 file
+        if temp_mp3_path and os.path.exists(temp_mp3_path):
+            try:
+                os.unlink(temp_mp3_path)
+                print(f"Successfully cleaned up temporary MP3 file: {temp_mp3_path}")
+            except Exception as e:
+                print(f"Error cleaning up temporary MP3 file: {e}")
 
 # Simple HTTP server for Render
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -324,30 +332,45 @@ async def chat(ctx, *, message: str):
         if temp_mp3_path and os.path.exists(temp_mp3_path):
             await delete_temp_file(temp_mp3_path)
 
-# Separate async function for deletion to be called by the callback
 async def delete_temp_file(file_path):
-    try:
-        # Add a small delay to ensure the file is no longer in use
-        await asyncio.sleep(2)  # Increased delay to 2 seconds
-        
-        if file_path and os.path.exists(file_path):
-            try:
-                # Try to close any open handles to the file
-                if os.name == 'nt':  # Windows
-                    subprocess.run(['handle.exe', file_path], capture_output=True)
-                os.unlink(file_path)
-                print(f"Successfully deleted temp file: {file_path}")
-            except Exception as e:
-                print(f"Error deleting temp file: {e}")
-                # If deletion fails, try again after a longer delay
-                await asyncio.sleep(5)
+    """Delete a temporary file with retries and proper error handling"""
+    if not file_path or not os.path.exists(file_path):
+        return
+
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            # Try to close any open handles to the file
+            if os.name == 'nt':  # Windows
                 try:
-                    os.unlink(file_path)
-                    print(f"Successfully deleted temp file on second attempt: {file_path}")
-                except Exception as e2:
-                    print(f"Failed to delete temp file after retry: {e2}")
-    except Exception as e:
-        print(f"Error in delete_temp_file: {e}")
+                    # Use handle.exe to close any open handles
+                    subprocess.run(['handle.exe', file_path], capture_output=True, check=True)
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    # handle.exe not found or failed, continue with normal deletion
+                    pass
+
+            # Wait a bit before attempting deletion
+            await asyncio.sleep(retry_delay)
+            
+            # Try to delete the file
+            os.unlink(file_path)
+            print(f"Successfully deleted temp file: {file_path}")
+            return
+            
+        except PermissionError as e:
+            print(f"Permission error deleting file (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+            else:
+                print(f"Failed to delete file after {max_retries} attempts: {file_path}")
+        except Exception as e:
+            print(f"Error deleting temp file (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+            else:
+                print(f"Failed to delete file after {max_retries} attempts: {file_path}")
 
 @bot.command(name='clear')
 async def clear_history(ctx):
