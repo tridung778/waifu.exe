@@ -9,7 +9,7 @@ import time
 import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import pyttsx3
+from gtts import gTTS
 import subprocess
 from pydub import AudioSegment
 import ffmpeg
@@ -56,62 +56,56 @@ def init_tts():
 
 def generate_speech(text, output_file):
     try:
-        # Create a temporary file for the initial WAV
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
-            temp_wav_path = temp_wav.name
+        # Create a temporary file for the initial MP3
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_mp3:
+            temp_mp3_path = temp_mp3.name
             
-            # Initialize TTS engine and save to WAV
-            engine = init_tts()
-            
-            # Try to speak first to test the voice
             try:
-                engine.say("Xin chào")  # Test with Vietnamese greeting
-                engine.runAndWait()
-                print("Voice test successful")
-            except Exception as e:
-                print(f"Voice test failed: {e}")
-            
-            # Now save the actual text to file
-            engine.save_to_file(text, temp_wav_path)
-            engine.runAndWait()
-            
-            # Verify the WAV file was created and has content
-            if not os.path.exists(temp_wav_path):
-                raise Exception("WAV file was not created")
+                # Generate speech using gTTS with Vietnamese language
+                tts = gTTS(text=text, lang='vi', slow=False)
+                tts.save(temp_mp3_path)
                 
-            wav_size = os.path.getsize(temp_wav_path)
-            if wav_size == 0:
-                raise Exception("WAV file is empty")
-                
-            print(f"WAV file created successfully: {temp_wav_path} ({wav_size} bytes)")
-            
-            # Convert WAV to the correct format for Discord
-            try:
-                # Load the WAV file
-                audio = AudioSegment.from_wav(temp_wav_path)
-                # Export as MP3 with specific settings
-                audio.export(output_file, format="mp3", parameters=["-ac", "2", "-ar", "48000"])
-                print(f"Converted to MP3: {output_file}")
-                
-                # Verify the MP3 file
-                if not os.path.exists(output_file):
+                # Verify the MP3 file was created and has content
+                if not os.path.exists(temp_mp3_path):
                     raise Exception("MP3 file was not created")
                     
-                mp3_size = os.path.getsize(output_file)
+                mp3_size = os.path.getsize(temp_mp3_path)
                 if mp3_size == 0:
                     raise Exception("MP3 file is empty")
                     
-                print(f"MP3 file created successfully: {output_file} ({mp3_size} bytes)")
-                return True
-            finally:
-                # Clean up the temporary WAV file
+                print(f"MP3 file created successfully: {temp_mp3_path} ({mp3_size} bytes)")
+                
+                # Convert MP3 to the correct format for Discord
                 try:
-                    os.unlink(temp_wav_path)
-                except Exception as e:
-                    print(f"Error cleaning up WAV file: {e}")
+                    # Load the MP3 file
+                    audio = AudioSegment.from_mp3(temp_mp3_path)
+                    # Export with specific settings for Discord
+                    audio.export(output_file, format="mp3", parameters=["-ac", "2", "-ar", "48000"])
+                    print(f"Converted to Discord format: {output_file}")
                     
+                    # Verify the final file
+                    if not os.path.exists(output_file):
+                        raise Exception("Final audio file was not created")
+                        
+                    final_size = os.path.getsize(output_file)
+                    if final_size == 0:
+                        raise Exception("Final audio file is empty")
+                        
+                    print(f"Final audio file created successfully: {output_file} ({final_size} bytes)")
+                    return True
+                finally:
+                    # Clean up the temporary MP3 file
+                    try:
+                        os.unlink(temp_mp3_path)
+                    except Exception as e:
+                        print(f"Error cleaning up MP3 file: {e}")
+                        
+            except Exception as e:
+                print(f"Error generating speech with gTTS: {e}")
+                return False
+                
     except Exception as e:
-        print(f"Error generating speech: {e}")
+        print(f"Error in speech generation: {e}")
         return False
 
 # Simple HTTP server for Render
