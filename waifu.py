@@ -8,9 +8,29 @@ import openai
 from openai import OpenAI
 import time
 import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Load environment variables
 load_dotenv()
+
+# Simple HTTP server for Render
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b'Waifu.exe Discord bot is running!')
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    print(f"Starting web server on port {port}...")
+    httpd.serve_forever()
+
+# Start the web server in a separate thread
+threading.Thread(target=run_web_server, daemon=True).start()
 
 # Initialize OpenAI client with OpenRouter configuration
 client = OpenAI(

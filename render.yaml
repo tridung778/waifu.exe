@@ -10,3 +10,5 @@ services:
         sync: false # This means you'll set this value in the Render dashboard
       - key: OPENAI_API_KEY
         sync: false # This means you'll set this value in the Render dashboard
+      - key: PORT
+        value: 10000
