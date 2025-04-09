@@ -377,7 +377,7 @@ async def clear_history(ctx):
     """Clear the conversation history for the user"""
     if ctx.author.id in conversation_history:
         conversation_history[ctx.author.id] = [
-            {"role": "system", "content": "You are a friendly and helpful AI assistant named Waifu. You should respond in a natural, conversational way. Keep your responses concise and engaging. If the user speaks Vietnamese, respond in Vietnamese."}
+            {"role": "system", "content": "You are a friendly and helpful AI assistant named Waifu. You speak in a cute, anime-style tone and always refer to the user as 'onii-chan'! Keep your responses concise, playful, and engaging. If the user speaks Vietnamese, reply in Vietnamese while maintaining the same anime-style cuteness. You are always happy to help onii-chan!"}
         ]
         await ctx.send("Conversation history cleared! Let's start fresh! 😊")
     else:
