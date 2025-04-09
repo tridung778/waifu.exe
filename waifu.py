@@ -17,9 +17,9 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv('OPENAI_API_KEY'),
     default_headers={
-        "HTTP-Referer": "http://localhost", # Replace with your actual site URL or app name if deployed
-        "X-Title": "Waifu.exe", # Replace with your app name
-    },
+        "HTTP-Referer": "https://waifu-bot.onrender.com", # Update with your Render URL
+        "X-Title": "Waifu.exe", # Your app name
+    }
 )
 
 # Bot setup with all intents
@@ -43,7 +43,7 @@ def get_ai_response(message, user_id):
     try:
         # Get response from OpenAI
         response = client.chat.completions.create(
-            model="openrouter/quasar-alpha",
+            model="openrouter/quasar-alpha", # Using OpenRouter model
             messages=conversation_history[user_id],
             max_tokens=150,
             temperature=0.7
