@@ -9,7 +9,7 @@ import time
 import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from gtts import gTTS
+from elevenlabs import generate, set_api_key, Voice, VoiceSettings
 import subprocess
 from pydub import AudioSegment
 import ffmpeg
@@ -17,42 +17,8 @@ import ffmpeg
 # Load environment variables
 load_dotenv()
 
-# Initialize text-to-speech engine
-def init_tts():
-    try:
-        engine = pyttsx3.init()
-        # Set voice properties
-        voices = engine.getProperty('voices')
-        print(f"Available voices: {[voice.name for voice in voices]}")
-        
-        # Try to find a Vietnamese female voice
-        for voice in voices:
-            if 'vietnamese' in voice.name.lower() or 'viet' in voice.name.lower():
-                if 'female' in voice.name.lower() or 'female' in voice.languages[0].lower():
-                    engine.setProperty('voice', voice.id)
-                    print(f"Using Vietnamese female voice: {voice.name}")
-                    break
-            elif 'female' in voice.name.lower():
-                # Fallback to any female voice if Vietnamese not found
-                engine.setProperty('voice', voice.id)
-                print(f"Using fallback female voice: {voice.name}")
-                break
-        
-        # Set speech rate and volume
-        engine.setProperty('rate', 150)  # Speed of speech
-        engine.setProperty('volume', 1.0)  # Maximum volume
-        
-        # Try to set language to Vietnamese if supported
-        try:
-            engine.setProperty('language', 'vi')
-            print("Set language to Vietnamese")
-        except Exception as e:
-            print(f"Could not set language to Vietnamese: {e}")
-            
-        return engine
-    except Exception as e:
-        print(f"Error initializing TTS engine: {e}")
-        raise
+# Set ElevenLabs API key
+set_api_key(os.getenv('ELEVENLABS_API_KEY'))
 
 def generate_speech(text, output_file):
     try:
@@ -61,14 +27,24 @@ def generate_speech(text, output_file):
             temp_mp3_path = temp_mp3.name
             
             try:
-                # Generate speech using gTTS with Vietnamese language and female voice
-                tts = gTTS(
+                # Generate speech using ElevenLabs
+                audio = generate(
                     text=text,
-                    lang='vi',  # Vietnamese language
-                    slow=False,  # Normal speed
-                    tld='com.vn'  # Use Vietnamese domain for better voice
+                    voice=Voice(
+                        voice_id=os.getenv('VOICE_ID', '21m00Tcm4TlvDq8ikWAM'),  # Default to Rachel
+                        settings=VoiceSettings(
+                            stability=0.5,
+                            similarity_boost=0.75,
+                            style=0.0,
+                            use_speaker_boost=True
+                        )
+                    ),
+                    model="eleven_multilingual_v2"
                 )
-                tts.save(temp_mp3_path)
+                
+                # Save the audio to file
+                with open(temp_mp3_path, 'wb') as f:
+                    f.write(audio)
                 
                 # Verify the MP3 file was created and has content
                 if not os.path.exists(temp_mp3_path):
@@ -119,7 +95,7 @@ def generate_speech(text, output_file):
                         print(f"Error cleaning up MP3 file: {e}")
                         
             except Exception as e:
-                print(f"Error generating speech with gTTS: {e}")
+                print(f"Error generating speech with ElevenLabs: {e}")
                 return False
                 
     except Exception as e:
