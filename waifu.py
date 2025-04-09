@@ -109,57 +109,71 @@ async def chat(ctx, *, message: str):
         # Get AI response
         ai_response = get_ai_response(message, ctx.author.id)
 
-        # Check if ctx.author is still in a voice channel
+        # First send the text response
+        await ctx.send(f"🤖 {ai_response}")
+
+        # Check if ctx.author is in a voice channel
         if not ctx.author.voice:
-            await ctx.send("You need to be in a voice channel to use this command!")
+            # If user is not in voice, just return after sending text response
             return
 
-        # Connect to voice channel if not already connected
-        voice_channel = ctx.author.voice.channel
-        if not ctx.voice_client:
-            vc = await voice_channel.connect()
-        else:
-            vc = ctx.voice_client
-            # Ensure the bot is in the same channel as the user
-            if vc.channel != voice_channel:
-                await vc.move_to(voice_channel)
-        
-        # Create a temporary file for the audio
-        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-            temp_file_path = temp_file.name
-            # Generate speech from the AI response
-            try:
-                tts = gTTS(text=ai_response, lang='vi')
-                tts.save(temp_file_path)
-            except Exception as tts_error:
-                print(f"gTTS Error: {tts_error}")
-                await ctx.send(f"🤖 {ai_response}\n*(Could not generate voice: {tts_error})*" )
-                # Clean up if TTS failed
-                if temp_file_path and os.path.exists(temp_file_path):
-                    try: os.unlink(temp_file_path) 
-                    except Exception: pass
-                return # Stop processing if TTS fails
-
-        # Define the after-play callback to delete the file
-        def after_playing(error):
-            if error:
-                print(f'Error playing audio: {error}')
-            # Use asyncio.run_coroutine_threadsafe for thread safety
-            coro = delete_temp_file(temp_file_path)
-            future = asyncio.run_coroutine_threadsafe(coro, bot.loop)
-            try:
-                future.result() # Wait for completion, optional
-            except Exception as e:
-                print(f"Error in after_playing callback: {e}")
-        
-        # Play the audio with the callback
-        audio_source = discord.FFmpegPCMAudio(temp_file_path)
-        vc.stop()
-        vc.play(audio_source, after=after_playing)
-        
-        # Send text response as well
-        await ctx.send(f"🤖 {ai_response}")
+        # Try to connect to voice channel
+        try:
+            voice_channel = ctx.author.voice.channel
+            if not ctx.voice_client:
+                vc = await voice_channel.connect()
+            else:
+                vc = ctx.voice_client
+                # Ensure the bot is in the same channel as the user
+                if vc.channel != voice_channel:
+                    await vc.move_to(voice_channel)
             
+            # Create a temporary file for the audio
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                temp_file_path = temp_file.name
+                # Generate speech from the AI response
+                try:
+                    tts = gTTS(text=ai_response, lang='vi')
+                    tts.save(temp_file_path)
+                except Exception as tts_error:
+                    print(f"gTTS Error: {tts_error}")
+                    # Clean up if TTS failed
+                    if temp_file_path and os.path.exists(temp_file_path):
+                        try: os.unlink(temp_file_path) 
+                        except Exception: pass
+                    return # Stop processing if TTS fails
+
+            # Define the after-play callback to delete the file
+            def after_playing(error):
+                if error:
+                    print(f'Error playing audio: {error}')
+                # Use asyncio.run_coroutine_threadsafe for thread safety
+                coro = delete_temp_file(temp_file_path)
+                future = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+                try:
+                    future.result() # Wait for completion, optional
+                except Exception as e:
+                    print(f"Error in after_playing callback: {e}")
+            
+            # Make sure we're still connected before playing
+            if vc.is_connected():
+                # Play the audio with the callback
+                audio_source = discord.FFmpegPCMAudio(temp_file_path)
+                vc.stop()
+                vc.play(audio_source, after=after_playing)
+            else:
+                # Not connected, clean up the file
+                print("Voice client disconnected before playing audio")
+                await delete_temp_file(temp_file_path)
+                
+        except discord.errors.ClientException as ce:
+            print(f"Discord client error in voice handling: {ce}")
+            # If voice connection fails, just use text-only response
+            # Clean up any temporary file that might have been created
+            if temp_file_path and os.path.exists(temp_file_path):
+                try: os.unlink(temp_file_path)
+                except Exception: pass
+                
     except discord.errors.PrivilegedIntentsRequired:
         await ctx.send("Error: Please enable privileged intents in the Discord Developer Portal!")
         print("Error: Please enable privileged intents in the Discord Developer Portal!")
