@@ -39,7 +39,7 @@ def generate_speech(text, output_file):
                             use_speaker_boost=True
                         )
                     ),
-                    model="eleven_multilingual_v2"
+                    model="eleven_flash_v2_5"
                 )
                 
                 # Save the audio to file
@@ -207,6 +207,7 @@ async def on_voice_state_update(member, before, after):
 @bot.command(name='chat')
 async def chat(ctx, *, message: str):
     temp_file_path = None
+    temp_mp3_path = None
     try:
         # Get AI response
         ai_response = get_ai_response(message, ctx.author.id)
@@ -235,23 +236,29 @@ async def chat(ctx, *, message: str):
                 elif vc.channel != voice_channel:
                     await vc.move_to(voice_channel)
             
-            # Create a temporary file for the audio
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-                temp_file_path = temp_file.name
-                # Generate speech from the AI response
-                if not generate_speech(ai_response, temp_file_path):
-                    print("Failed to generate speech")
-                    return
+            # Create temporary files
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_mp3:
+                temp_mp3_path = temp_mp3.name
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                    temp_file_path = temp_file.name
+                    
+                    # Generate speech from the AI response
+                    if not generate_speech(ai_response, temp_file_path):
+                        print("Failed to generate speech")
+                        return
 
-            # Define the after-play callback to delete the file
+            # Define the after-play callback to delete the files
             def after_playing(error):
                 if error:
                     print(f'Error playing audio: {error}')
                 # Use asyncio.run_coroutine_threadsafe for thread safety
-                coro = delete_temp_file(temp_file_path)
-                future = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+                coro1 = delete_temp_file(temp_file_path)
+                coro2 = delete_temp_file(temp_mp3_path)
+                future1 = asyncio.run_coroutine_threadsafe(coro1, bot.loop)
+                future2 = asyncio.run_coroutine_threadsafe(coro2, bot.loop)
                 try:
-                    future.result(timeout=5) # Wait for completion with timeout
+                    future1.result(timeout=10)  # Increased timeout
+                    future2.result(timeout=10)
                 except Exception as e:
                     print(f"Error in after_playing callback: {e}")
             
@@ -264,27 +271,31 @@ async def chat(ctx, *, message: str):
                 vc.play(audio_source, after=after_playing)
                 print(f"Playing audio from {temp_file_path}")
             else:
-                # Not connected, clean up the file
+                # Not connected, clean up the files
                 print("Voice client disconnected before playing audio")
                 await delete_temp_file(temp_file_path)
+                await delete_temp_file(temp_mp3_path)
                 
         except discord.errors.ClientException as ce:
             print(f"Discord client error in voice handling: {ce}")
             # If voice connection fails, just use text-only response
-            # Clean up any temporary file that might have been created
+            # Clean up any temporary files that might have been created
             if temp_file_path and os.path.exists(temp_file_path):
-                try: os.unlink(temp_file_path)
-                except Exception: pass
+                await delete_temp_file(temp_file_path)
+            if temp_mp3_path and os.path.exists(temp_mp3_path):
+                await delete_temp_file(temp_mp3_path)
         except asyncio.TimeoutError:
             print("Timeout while connecting to voice channel")
             if temp_file_path and os.path.exists(temp_file_path):
-                try: os.unlink(temp_file_path)
-                except Exception: pass
+                await delete_temp_file(temp_file_path)
+            if temp_mp3_path and os.path.exists(temp_mp3_path):
+                await delete_temp_file(temp_mp3_path)
         except discord.errors.ConnectionClosed as cc:
             print(f"Voice connection closed: {cc}")
             if temp_file_path and os.path.exists(temp_file_path):
-                try: os.unlink(temp_file_path)
-                except Exception: pass
+                await delete_temp_file(temp_file_path)
+            if temp_mp3_path and os.path.exists(temp_mp3_path):
+                await delete_temp_file(temp_mp3_path)
             # Try to reconnect
             try:
                 await asyncio.sleep(1)
@@ -301,26 +312,42 @@ async def chat(ctx, *, message: str):
         await ctx.send(f"🤖 Error contacting AI: {error_message}")
         # Clean up if API failed but TTS file might exist
         if temp_file_path and os.path.exists(temp_file_path):
-            try: os.unlink(temp_file_path)
-            except Exception: pass
+            await delete_temp_file(temp_file_path)
+        if temp_mp3_path and os.path.exists(temp_mp3_path):
+            await delete_temp_file(temp_mp3_path)
     except Exception as e:
         await ctx.send(f"An error occurred: {str(e)}")
         print(f"Error in chat command: {str(e)}")
         # Generic cleanup
         if temp_file_path and os.path.exists(temp_file_path):
-            try: os.unlink(temp_file_path)
-            except Exception: pass
+            await delete_temp_file(temp_file_path)
+        if temp_mp3_path and os.path.exists(temp_mp3_path):
+            await delete_temp_file(temp_mp3_path)
 
 # Separate async function for deletion to be called by the callback
 async def delete_temp_file(file_path):
     try:
-        # Add a small delay just in case
-        await asyncio.sleep(1)
+        # Add a small delay to ensure the file is no longer in use
+        await asyncio.sleep(2)  # Increased delay to 2 seconds
+        
         if file_path and os.path.exists(file_path):
-            os.unlink(file_path)
-            # print(f"Successfully deleted temp file: {file_path}") # Optional debug print
+            try:
+                # Try to close any open handles to the file
+                if os.name == 'nt':  # Windows
+                    subprocess.run(['handle.exe', file_path], capture_output=True)
+                os.unlink(file_path)
+                print(f"Successfully deleted temp file: {file_path}")
+            except Exception as e:
+                print(f"Error deleting temp file: {e}")
+                # If deletion fails, try again after a longer delay
+                await asyncio.sleep(5)
+                try:
+                    os.unlink(file_path)
+                    print(f"Successfully deleted temp file on second attempt: {file_path}")
+                except Exception as e2:
+                    print(f"Failed to delete temp file after retry: {e2}")
     except Exception as e:
-        print(f"Error deleting temp file in callback: {str(e)}")
+        print(f"Error in delete_temp_file: {e}")
 
 @bot.command(name='clear')
 async def clear_history(ctx):
@@ -379,8 +406,7 @@ async def test_voice(ctx):
                 print(f"Test voice error: {e}")
                 await ctx.send(f"Error during voice test: {e}")
                 if temp_file_path and os.path.exists(temp_file_path):
-                    try: os.unlink(temp_file_path)
-                    except Exception: pass
+                    await delete_temp_file(temp_file_path)
     except Exception as e:
         print(f"Voice test error: {e}")
         await ctx.send(f"Failed to test voice: {e}")
