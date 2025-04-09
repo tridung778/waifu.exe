@@ -102,6 +102,12 @@ async def on_ready():
     print('2. SERVER MEMBERS INTENT')
     print('3. PRESENCE INTENT')
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # Handle when the bot is disconnected from voice
+    if member.id == bot.user.id and before.channel and not after.channel:
+        print(f"Bot was disconnected from voice channel {before.channel.name}")
+
 @bot.command(name='chat')
 async def chat(ctx, *, message: str):
     temp_file_path = None
@@ -121,11 +127,15 @@ async def chat(ctx, *, message: str):
         try:
             voice_channel = ctx.author.voice.channel
             if not ctx.voice_client:
-                vc = await voice_channel.connect()
+                vc = await voice_channel.connect(timeout=15, reconnect=True)
             else:
                 vc = ctx.voice_client
+                # If voice client exists but is not connected
+                if not vc.is_connected():
+                    await vc.disconnect(force=True)
+                    vc = await voice_channel.connect(timeout=15, reconnect=True)
                 # Ensure the bot is in the same channel as the user
-                if vc.channel != voice_channel:
+                elif vc.channel != voice_channel:
                     await vc.move_to(voice_channel)
             
             # Create a temporary file for the audio
@@ -151,7 +161,7 @@ async def chat(ctx, *, message: str):
                 coro = delete_temp_file(temp_file_path)
                 future = asyncio.run_coroutine_threadsafe(coro, bot.loop)
                 try:
-                    future.result() # Wait for completion, optional
+                    future.result(timeout=5) # Wait for completion with timeout
                 except Exception as e:
                     print(f"Error in after_playing callback: {e}")
             
@@ -159,7 +169,8 @@ async def chat(ctx, *, message: str):
             if vc.is_connected():
                 # Play the audio with the callback
                 audio_source = discord.FFmpegPCMAudio(temp_file_path)
-                vc.stop()
+                if vc.is_playing():
+                    vc.stop()
                 vc.play(audio_source, after=after_playing)
             else:
                 # Not connected, clean up the file
@@ -173,7 +184,16 @@ async def chat(ctx, *, message: str):
             if temp_file_path and os.path.exists(temp_file_path):
                 try: os.unlink(temp_file_path)
                 except Exception: pass
-                
+        except asyncio.TimeoutError:
+            print("Timeout while connecting to voice channel")
+            if temp_file_path and os.path.exists(temp_file_path):
+                try: os.unlink(temp_file_path)
+                except Exception: pass
+        except discord.errors.ConnectionClosed as cc:
+            print(f"Voice connection closed: {cc}")
+            if temp_file_path and os.path.exists(temp_file_path):
+                try: os.unlink(temp_file_path)
+                except Exception: pass
     except discord.errors.PrivilegedIntentsRequired:
         await ctx.send("Error: Please enable privileged intents in the Discord Developer Portal!")
         print("Error: Please enable privileged intents in the Discord Developer Portal!")
@@ -214,6 +234,15 @@ async def clear_history(ctx):
         await ctx.send("Conversation history cleared! Let's start fresh! 😊")
     else:
         await ctx.send("No conversation history to clear!")
+
+@bot.command(name='disconnect', aliases=['dc', 'leave'])
+async def disconnect_voice(ctx):
+    """Disconnect the bot from the voice channel"""
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect(force=True)
+        await ctx.send("Disconnected from voice channel! 👋")
+    else:
+        await ctx.send("I'm not connected to any voice channel!")
 
 # Run the bot
 token = os.getenv('DISCORD_TOKEN')
