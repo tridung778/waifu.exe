@@ -109,7 +109,7 @@ async def chat(ctx, *, message: str):
             temp_file_path = temp_file.name
             # Generate speech from the AI response
             try:
-                tts = gTTS(text=ai_response, lang='ja')
+                tts = gTTS(text=ai_response, lang='vi')
                 tts.save(temp_file_path)
             except Exception as tts_error:
                 print(f"gTTS Error: {tts_error}")

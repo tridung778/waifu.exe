@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: waifu-bot
+    env: docker
+    region: oregon # Choose your preferred region
+    plan: free # Choose your plan
+    healthCheckPath: / # Not strictly necessary for a bot, but Render requires it
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false # This means you'll set this value in the Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false # This means you'll set this value in the Render dashboard
