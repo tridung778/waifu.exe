@@ -1,7 +1,6 @@
 import os
 import discord
 from discord.ext import commands
-from gtts import gTTS
 import tempfile
 from dotenv import load_dotenv
 import openai
@@ -10,9 +9,25 @@ import time
 import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import pyttsx3
+import subprocess
 
 # Load environment variables
 load_dotenv()
+
+# Initialize text-to-speech engine
+def init_tts():
+    engine = pyttsx3.init()
+    # Set voice properties
+    voices = engine.getProperty('voices')
+    # Try to find a female voice
+    for voice in voices:
+        if 'female' in voice.name.lower():
+            engine.setProperty('voice', voice.id)
+            break
+    # Set speech rate
+    engine.setProperty('rate', 150)  # Speed of speech
+    return engine
 
 # Simple HTTP server for Render
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -139,14 +154,17 @@ async def chat(ctx, *, message: str):
                     await vc.move_to(voice_channel)
             
             # Create a temporary file for the audio
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
                 temp_file_path = temp_file.name
                 # Generate speech from the AI response
                 try:
-                    tts = gTTS(text=ai_response, lang='vi')
-                    tts.save(temp_file_path)
+                    # Initialize TTS engine
+                    engine = init_tts()
+                    # Save speech to file
+                    engine.save_to_file(ai_response, temp_file_path)
+                    engine.runAndWait()
                 except Exception as tts_error:
-                    print(f"gTTS Error: {tts_error}")
+                    print(f"TTS Error: {tts_error}")
                     # Clean up if TTS failed
                     if temp_file_path and os.path.exists(temp_file_path):
                         try: os.unlink(temp_file_path) 
