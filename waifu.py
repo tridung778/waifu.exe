@@ -25,16 +25,30 @@ def init_tts():
         voices = engine.getProperty('voices')
         print(f"Available voices: {[voice.name for voice in voices]}")
         
-        # Try to find a female voice
+        # Try to find a Vietnamese female voice
         for voice in voices:
-            if 'female' in voice.name.lower():
+            if 'vietnamese' in voice.name.lower() or 'viet' in voice.name.lower():
+                if 'female' in voice.name.lower() or 'female' in voice.languages[0].lower():
+                    engine.setProperty('voice', voice.id)
+                    print(f"Using Vietnamese female voice: {voice.name}")
+                    break
+            elif 'female' in voice.name.lower():
+                # Fallback to any female voice if Vietnamese not found
                 engine.setProperty('voice', voice.id)
-                print(f"Using voice: {voice.name}")
+                print(f"Using fallback female voice: {voice.name}")
                 break
         
         # Set speech rate and volume
         engine.setProperty('rate', 150)  # Speed of speech
         engine.setProperty('volume', 1.0)  # Maximum volume
+        
+        # Try to set language to Vietnamese if supported
+        try:
+            engine.setProperty('language', 'vi')
+            print("Set language to Vietnamese")
+        except Exception as e:
+            print(f"Could not set language to Vietnamese: {e}")
+            
         return engine
     except Exception as e:
         print(f"Error initializing TTS engine: {e}")
@@ -48,6 +62,16 @@ def generate_speech(text, output_file):
             
             # Initialize TTS engine and save to WAV
             engine = init_tts()
+            
+            # Try to speak first to test the voice
+            try:
+                engine.say("Xin chào")  # Test with Vietnamese greeting
+                engine.runAndWait()
+                print("Voice test successful")
+            except Exception as e:
+                print(f"Voice test failed: {e}")
+            
+            # Now save the actual text to file
             engine.save_to_file(text, temp_wav_path)
             engine.runAndWait()
             
