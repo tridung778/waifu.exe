@@ -17,18 +17,51 @@ load_dotenv()
 
 # Initialize text-to-speech engine
 def init_tts():
-    engine = pyttsx3.init()
-    # Set voice properties
-    voices = engine.getProperty('voices')
-    # Try to find a female voice
-    for voice in voices:
-        if 'female' in voice.name.lower():
-            engine.setProperty('voice', voice.id)
-            break
-    # Set speech rate and volume
-    engine.setProperty('rate', 150)  # Speed of speech
-    engine.setProperty('volume', 1.0)  # Maximum volume
-    return engine
+    try:
+        engine = pyttsx3.init()
+        # Set voice properties
+        voices = engine.getProperty('voices')
+        print(f"Available voices: {[voice.name for voice in voices]}")
+        
+        # Try to find a female voice
+        for voice in voices:
+            if 'female' in voice.name.lower():
+                engine.setProperty('voice', voice.id)
+                print(f"Using voice: {voice.name}")
+                break
+        
+        # Set speech rate and volume
+        engine.setProperty('rate', 150)  # Speed of speech
+        engine.setProperty('volume', 1.0)  # Maximum volume
+        return engine
+    except Exception as e:
+        print(f"Error initializing TTS engine: {e}")
+        raise
+
+def generate_speech(text, output_file):
+    try:
+        engine = init_tts()
+        # First try to speak to test the engine
+        engine.say("Test")
+        engine.runAndWait()
+        
+        # Now save to file
+        engine.save_to_file(text, output_file)
+        engine.runAndWait()
+        
+        # Verify the file was created and has content
+        if not os.path.exists(output_file):
+            raise Exception("TTS file was not created")
+            
+        file_size = os.path.getsize(output_file)
+        if file_size == 0:
+            raise Exception("TTS file is empty")
+            
+        print(f"TTS file created successfully: {output_file} ({file_size} bytes)")
+        return True
+    except Exception as e:
+        print(f"Error generating speech: {e}")
+        return False
 
 # Simple HTTP server for Render
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -167,25 +200,9 @@ async def chat(ctx, *, message: str):
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
                 temp_file_path = temp_file.name
                 # Generate speech from the AI response
-                try:
-                    # Initialize TTS engine
-                    engine = init_tts()
-                    # Save speech to file
-                    engine.save_to_file(ai_response, temp_file_path)
-                    engine.runAndWait()
-                    
-                    # Ensure the file was created and has content
-                    if not os.path.exists(temp_file_path) or os.path.getsize(temp_file_path) == 0:
-                        raise Exception("TTS file was not created or is empty")
-                        
-                    print(f"TTS file created successfully: {temp_file_path}")
-                except Exception as tts_error:
-                    print(f"TTS Error: {tts_error}")
-                    # Clean up if TTS failed
-                    if temp_file_path and os.path.exists(temp_file_path):
-                        try: os.unlink(temp_file_path) 
-                        except Exception: pass
-                    return # Stop processing if TTS fails
+                if not generate_speech(ai_response, temp_file_path):
+                    print("Failed to generate speech")
+                    return
 
             # Define the after-play callback to delete the file
             def after_playing(error):
@@ -307,15 +324,10 @@ async def test_voice(ctx):
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
             temp_file_path = temp_file.name
             try:
-                engine = init_tts()
                 test_text = "Hello! This is a test of the voice system. Can you hear me?"
-                engine.save_to_file(test_text, temp_file_path)
-                engine.runAndWait()
-                
-                if not os.path.exists(temp_file_path) or os.path.getsize(temp_file_path) == 0:
-                    raise Exception("Test audio file was not created or is empty")
-                
-                print(f"Test audio file created: {temp_file_path}")
+                if not generate_speech(test_text, temp_file_path):
+                    await ctx.send("Failed to generate test audio. Please check the console for errors.")
+                    return
                 
                 # Play the test audio
                 audio_source = discord.FFmpegPCMAudio(temp_file_path)
