@@ -25,8 +25,9 @@ def init_tts():
         if 'female' in voice.name.lower():
             engine.setProperty('voice', voice.id)
             break
-    # Set speech rate
+    # Set speech rate and volume
     engine.setProperty('rate', 150)  # Speed of speech
+    engine.setProperty('volume', 1.0)  # Maximum volume
     return engine
 
 # Simple HTTP server for Render
@@ -122,6 +123,14 @@ async def on_voice_state_update(member, before, after):
     # Handle when the bot is disconnected from voice
     if member.id == bot.user.id and before.channel and not after.channel:
         print(f"Bot was disconnected from voice channel {before.channel.name}")
+        # Try to reconnect if we were disconnected
+        if before.channel:
+            try:
+                await asyncio.sleep(1)  # Wait a bit before reconnecting
+                await before.channel.connect(timeout=15, reconnect=True)
+                print(f"Successfully reconnected to voice channel {before.channel.name}")
+            except Exception as e:
+                print(f"Failed to reconnect to voice channel: {e}")
 
 @bot.command(name='chat')
 async def chat(ctx, *, message: str):
@@ -148,6 +157,7 @@ async def chat(ctx, *, message: str):
                 # If voice client exists but is not connected
                 if not vc.is_connected():
                     await vc.disconnect(force=True)
+                    await asyncio.sleep(1)  # Wait a bit before reconnecting
                     vc = await voice_channel.connect(timeout=15, reconnect=True)
                 # Ensure the bot is in the same channel as the user
                 elif vc.channel != voice_channel:
@@ -163,6 +173,12 @@ async def chat(ctx, *, message: str):
                     # Save speech to file
                     engine.save_to_file(ai_response, temp_file_path)
                     engine.runAndWait()
+                    
+                    # Ensure the file was created and has content
+                    if not os.path.exists(temp_file_path) or os.path.getsize(temp_file_path) == 0:
+                        raise Exception("TTS file was not created or is empty")
+                        
+                    print(f"TTS file created successfully: {temp_file_path}")
                 except Exception as tts_error:
                     print(f"TTS Error: {tts_error}")
                     # Clean up if TTS failed
@@ -190,6 +206,7 @@ async def chat(ctx, *, message: str):
                 if vc.is_playing():
                     vc.stop()
                 vc.play(audio_source, after=after_playing)
+                print(f"Playing audio from {temp_file_path}")
             else:
                 # Not connected, clean up the file
                 print("Voice client disconnected before playing audio")
@@ -212,6 +229,13 @@ async def chat(ctx, *, message: str):
             if temp_file_path and os.path.exists(temp_file_path):
                 try: os.unlink(temp_file_path)
                 except Exception: pass
+            # Try to reconnect
+            try:
+                await asyncio.sleep(1)
+                await voice_channel.connect(timeout=15, reconnect=True)
+                print("Successfully reconnected after connection closed")
+            except Exception as e:
+                print(f"Failed to reconnect after connection closed: {e}")
     except discord.errors.PrivilegedIntentsRequired:
         await ctx.send("Error: Please enable privileged intents in the Discord Developer Portal!")
         print("Error: Please enable privileged intents in the Discord Developer Portal!")
@@ -261,6 +285,54 @@ async def disconnect_voice(ctx):
         await ctx.send("Disconnected from voice channel! 👋")
     else:
         await ctx.send("I'm not connected to any voice channel!")
+
+@bot.command(name='testvoice')
+async def test_voice(ctx):
+    """Test the voice functionality"""
+    if not ctx.author.voice:
+        await ctx.send("You need to be in a voice channel to test voice!")
+        return
+        
+    try:
+        # Connect to voice channel
+        voice_channel = ctx.author.voice.channel
+        if not ctx.voice_client:
+            vc = await voice_channel.connect(timeout=15, reconnect=True)
+        else:
+            vc = ctx.voice_client
+            if vc.channel != voice_channel:
+                await vc.move_to(voice_channel)
+        
+        # Create test audio file
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            try:
+                engine = init_tts()
+                test_text = "Hello! This is a test of the voice system. Can you hear me?"
+                engine.save_to_file(test_text, temp_file_path)
+                engine.runAndWait()
+                
+                if not os.path.exists(temp_file_path) or os.path.getsize(temp_file_path) == 0:
+                    raise Exception("Test audio file was not created or is empty")
+                
+                print(f"Test audio file created: {temp_file_path}")
+                
+                # Play the test audio
+                audio_source = discord.FFmpegPCMAudio(temp_file_path)
+                if vc.is_playing():
+                    vc.stop()
+                vc.play(audio_source, after=lambda e: asyncio.run_coroutine_threadsafe(delete_temp_file(temp_file_path), bot.loop))
+                
+                await ctx.send("Playing test audio... 🎵")
+            except Exception as e:
+                print(f"Test voice error: {e}")
+                await ctx.send(f"Error during voice test: {e}")
+                if temp_file_path and os.path.exists(temp_file_path):
+                    try: os.unlink(temp_file_path)
+                    except Exception: pass
+    except Exception as e:
+        print(f"Voice test error: {e}")
+        await ctx.send(f"Failed to test voice: {e}")
 
 # Run the bot
 token = os.getenv('DISCORD_TOKEN')
