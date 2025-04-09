@@ -11,6 +11,8 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import pyttsx3
 import subprocess
+from pydub import AudioSegment
+import ffmpeg
 
 # Load environment variables
 load_dotenv()
@@ -40,25 +42,50 @@ def init_tts():
 
 def generate_speech(text, output_file):
     try:
-        engine = init_tts()
-        # First try to speak to test the engine
-        engine.say("Test")
-        engine.runAndWait()
-        
-        # Now save to file
-        engine.save_to_file(text, output_file)
-        engine.runAndWait()
-        
-        # Verify the file was created and has content
-        if not os.path.exists(output_file):
-            raise Exception("TTS file was not created")
+        # Create a temporary file for the initial WAV
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+            temp_wav_path = temp_wav.name
             
-        file_size = os.path.getsize(output_file)
-        if file_size == 0:
-            raise Exception("TTS file is empty")
+            # Initialize TTS engine and save to WAV
+            engine = init_tts()
+            engine.save_to_file(text, temp_wav_path)
+            engine.runAndWait()
             
-        print(f"TTS file created successfully: {output_file} ({file_size} bytes)")
-        return True
+            # Verify the WAV file was created and has content
+            if not os.path.exists(temp_wav_path):
+                raise Exception("WAV file was not created")
+                
+            wav_size = os.path.getsize(temp_wav_path)
+            if wav_size == 0:
+                raise Exception("WAV file is empty")
+                
+            print(f"WAV file created successfully: {temp_wav_path} ({wav_size} bytes)")
+            
+            # Convert WAV to the correct format for Discord
+            try:
+                # Load the WAV file
+                audio = AudioSegment.from_wav(temp_wav_path)
+                # Export as MP3 with specific settings
+                audio.export(output_file, format="mp3", parameters=["-ac", "2", "-ar", "48000"])
+                print(f"Converted to MP3: {output_file}")
+                
+                # Verify the MP3 file
+                if not os.path.exists(output_file):
+                    raise Exception("MP3 file was not created")
+                    
+                mp3_size = os.path.getsize(output_file)
+                if mp3_size == 0:
+                    raise Exception("MP3 file is empty")
+                    
+                print(f"MP3 file created successfully: {output_file} ({mp3_size} bytes)")
+                return True
+            finally:
+                # Clean up the temporary WAV file
+                try:
+                    os.unlink(temp_wav_path)
+                except Exception as e:
+                    print(f"Error cleaning up WAV file: {e}")
+                    
     except Exception as e:
         print(f"Error generating speech: {e}")
         return False
@@ -197,7 +224,7 @@ async def chat(ctx, *, message: str):
                     await vc.move_to(voice_channel)
             
             # Create a temporary file for the audio
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
                 temp_file_path = temp_file.name
                 # Generate speech from the AI response
                 if not generate_speech(ai_response, temp_file_path):
