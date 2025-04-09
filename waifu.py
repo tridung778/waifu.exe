@@ -61,8 +61,13 @@ def generate_speech(text, output_file):
             temp_mp3_path = temp_mp3.name
             
             try:
-                # Generate speech using gTTS with Vietnamese language
-                tts = gTTS(text=text, lang='vi', slow=False)
+                # Generate speech using gTTS with Vietnamese language and female voice
+                tts = gTTS(
+                    text=text,
+                    lang='vi',  # Vietnamese language
+                    slow=False,  # Normal speed
+                    tld='com.vn'  # Use Vietnamese domain for better voice
+                )
                 tts.save(temp_mp3_path)
                 
                 # Verify the MP3 file was created and has content
@@ -79,8 +84,21 @@ def generate_speech(text, output_file):
                 try:
                     # Load the MP3 file
                     audio = AudioSegment.from_mp3(temp_mp3_path)
+                    
+                    # Adjust audio settings for better voice quality
+                    # Increase volume by 3dB
+                    audio = audio + 3
+                    
                     # Export with specific settings for Discord
-                    audio.export(output_file, format="mp3", parameters=["-ac", "2", "-ar", "48000"])
+                    audio.export(
+                        output_file,
+                        format="mp3",
+                        parameters=[
+                            "-ac", "2",  # Stereo audio
+                            "-ar", "48000",  # High sample rate
+                            "-b:a", "192k"  # Higher bitrate for better quality
+                        ]
+                    )
                     print(f"Converted to Discord format: {output_file}")
                     
                     # Verify the final file
