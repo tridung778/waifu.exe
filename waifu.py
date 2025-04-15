@@ -20,6 +20,8 @@ load_dotenv()
 # Set ElevenLabs API key
 set_api_key(os.getenv('ELEVENLABS_API_KEY'))
 
+Model_AI = "google/gemini-2.5-pro-exp-03-25:free"
+
 def generate_speech(text, output_file):
     """Generate speech from text using ElevenLabs"""
     temp_mp3_path = None
@@ -150,7 +152,7 @@ def get_ai_response(message, user_id):
     # Initialize conversation history for new users
     if user_id not in conversation_history:
         conversation_history[user_id] = [
-            {"role": "system", "content": "You are a friendly and helpful AI assistant named Waifu. You should respond in a natural, conversational way. Keep your responses concise and engaging. If the user speaks Vietnamese, respond in Vietnamese."}
+            {"role": "system", "content": "Bạn là một trợ lý AI thân thiện và hữu ích tên là Waifu. Bạn nên trả lời theo cách tự nhiên, giao tiếp. Giữ cho câu trả lời của bạn dễ thương và hấp dẫn. Nếu người dùng nói tiếng Việt, hãy trả lời bằng tiếng Việt. Hãy gọi người dùng là 'Onii-chan'"}
         ]
     
     # Add user message to history
@@ -159,7 +161,7 @@ def get_ai_response(message, user_id):
     try:
         # Get response from OpenAI
         response = client.chat.completions.create(
-            model="openrouter/quasar-alpha", # Using OpenRouter model
+            model=Model_AI, # Using OpenRouter model
             messages=conversation_history[user_id],
             max_tokens=150,
             temperature=0.7
