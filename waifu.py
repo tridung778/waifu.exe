@@ -121,6 +121,10 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write(b'Waifu.exe Discord bot is running!')
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
