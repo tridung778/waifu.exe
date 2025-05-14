@@ -12,7 +12,9 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from elevenlabs import generate, set_api_key, Voice, VoiceSettings
 import subprocess
 from pydub import AudioSegment
-import ffmpeg
+from keep_alive import keep_alive
+
+keep_alive()
 
 # Load environment variables
 load_dotenv()
