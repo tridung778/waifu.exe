@@ -1,5 +1,6 @@
 from flask import Flask
 from threading import Thread
+from waitress import serve  # <- thêm dòng này
 
 app = Flask('')
 
@@ -8,7 +9,7 @@ def home():
     return "Hello. I am alive!", 200
 
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    serve(app, host="0.0.0.0", port=8080)  # <- dùng waitress thay vì app.run()
 
 def keep_alive():
     t = Thread(target=run)
