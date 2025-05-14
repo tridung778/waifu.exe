@@ -20,7 +20,7 @@ load_dotenv()
 # Set ElevenLabs API key
 set_api_key(os.getenv('ELEVENLABS_API_KEY'))
 
-Model_AI = "google/gemini-2.5-pro-exp-03-25:free"
+Model_AI = "deepseek/deepseek-chat-v3-0324:free"
 
 def generate_speech(text, output_file):
     """Generate speech from text using ElevenLabs"""
@@ -163,7 +163,7 @@ def get_ai_response(message, user_id):
         response = client.chat.completions.create(
             model=Model_AI, # Using OpenRouter model
             messages=conversation_history[user_id],
-            max_tokens=150,
+            max_tokens=500,
             temperature=0.7
         )
         
