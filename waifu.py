@@ -12,9 +12,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from elevenlabs import generate, set_api_key, Voice, VoiceSettings
 import subprocess
 from pydub import AudioSegment
-from keep_alive import keep_alive
-
-keep_alive()
 
 # Load environment variables
 load_dotenv()
@@ -169,7 +166,6 @@ def get_ai_response(message, user_id):
         response = client.chat.completions.create(
             model=Model_AI, # Using OpenRouter model
             messages=conversation_history[user_id],
-            max_tokens=500,
             temperature=0.7
         )
         
@@ -239,18 +235,25 @@ async def chat(ctx, *, message: str):
         # Try to connect to voice channel
         try:
             voice_channel = ctx.author.voice.channel
-            if not ctx.voice_client:
-                vc = await voice_channel.connect(timeout=15, reconnect=True)
-            else:
-                vc = ctx.voice_client
-                # If voice client exists but is not connected
-                if not vc.is_connected():
-                    await vc.disconnect(force=True)
-                    await asyncio.sleep(1)  # Wait a bit before reconnecting
-                    vc = await voice_channel.connect(timeout=15, reconnect=True)
-                # Ensure the bot is in the same channel as the user
-                elif vc.channel != voice_channel:
-                    await vc.move_to(voice_channel)
+            if ctx.voice_client:
+                # If already connected but in wrong channel
+                if ctx.voice_client.channel != voice_channel:
+                    await ctx.voice_client.disconnect(force=True)
+                    await asyncio.sleep(1)
+                else:
+                    vc = ctx.voice_client
+            
+            # Connect to voice channel with retry logic
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    vc = await voice_channel.connect(timeout=20)
+                    break
+                except (discord.ClientException, asyncio.TimeoutError) as e:
+                    if attempt == retries - 1:
+                        raise
+                    print(f"Connection attempt {attempt + 1} failed: {e}")
+                    await asyncio.sleep(1)
             
             # Create temporary files
             with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_mp3:
@@ -453,4 +456,4 @@ try:
 except discord.errors.LoginFailure:
     print("Error: Invalid token. Please check your DISCORD_TOKEN in .env file!")
 except Exception as e:
-    print(f"Error: {str(e)}") 
+    print(f"Error: {str(e)}")
