@@ -226,7 +226,7 @@ async def chat(ctx, *, message: str):
         # Get AI response (this may take time)
         ai_response = get_ai_response(message, ctx.author.id)
         # Prepare the code block response and mention the user
-        code_response = f"{ctx.author.mention}\n```{ai_response}```"
+        code_response = f"\n```{ai_response}```"
         # Edit the reply message to show the final answer
         await thinking_msg.edit(content=code_response)
 
