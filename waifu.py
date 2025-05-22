@@ -221,14 +221,13 @@ async def chat(ctx, *, message: str):
     temp_file_path = None
     temp_mp3_path = None
     try:
-        # Get AI response
+        # First send the 'thinking' message as a reply
+        thinking_msg = await ctx.reply(f"🤖 Đang suy nghĩ...")
+        # Get AI response (this may take time)
         ai_response = get_ai_response(message, ctx.author.id)
-
-        # First send the text response
-        thinking_msg = await ctx.send("🤖 Đang suy nghĩ...")
-        # Prepare the code block response
-        code_response = f"🤖\n```{ai_response}```"
-        # Edit the message to show the final answer
+        # Prepare the code block response and mention the user
+        code_response = f"{ctx.author.mention}\n```{ai_response}```"
+        # Edit the reply message to show the final answer
         await thinking_msg.edit(content=code_response)
 
         # Check if ctx.author is in a voice channel
