@@ -225,7 +225,8 @@ async def chat(ctx, *, message: str):
         ai_response = get_ai_response(message, ctx.author.id)
 
         # First send the text response
-        await ctx.send(f"🤖\n> {ai_response.replace('\n', '\n> ')}")
+        quoted_response = '\n'.join([f'> {line}' for line in ai_response.split('\n')])
+        await ctx.send(f"🤖\n{quoted_response}")
 
         # Check if ctx.author is in a voice channel
         if not ctx.author.voice:
